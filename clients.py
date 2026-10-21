@@ -11,6 +11,7 @@ class BackendError(RuntimeError):
     """An upstream request failed; details stay out of MCP responses."""
 
 
+# Thiết lập API key, chứng chỉ CA và thời gian chờ cho kết nối backend.
 def _client(url: str, api_key: str, ca_cert: str, timeout: float) -> httpx.Client:
     return httpx.Client(
         base_url=url,
@@ -28,6 +29,7 @@ class ElasticsearchClient:
         )
         self.settings = settings
 
+    # Gửi truy vấn tìm kiếm đến nguồn dữ liệu được phép và nhận phản hồi JSON.
     def search(self, index: str, body: dict) -> dict:
         if index not in (self.settings.event_index, self.settings.alert_alias):
             raise BackendError("Index ngoài phạm vi cấu hình")
@@ -40,10 +42,12 @@ class ElasticsearchClient:
             result = response.json()
         except (httpx.HTTPError, ValueError) as exc:
             raise BackendError("Không truy vấn được Elasticsearch") from exc
+        # Từ chối phản hồi bị timeout hoặc có shard lỗi để tránh coi kết quả thiếu là đầy đủ.
         if result.get("timed_out") or result.get("_shards", {}).get("failed", 0):
             raise BackendError("Elasticsearch trả kết quả chưa đầy đủ")
         return result
 
+    # Đọc khả năng tổng hợp của trường để lựa chọn trường thống kê phù hợp.
     def field_caps(self, fields: list[str]) -> dict:
         """Read field types from the configured event index before aggregating."""
         try:
@@ -71,6 +75,7 @@ class KibanaClient:
             settings.timeout_seconds,
         )
 
+    # Đọc metadata của rule từ Kibana để bổ sung thông tin đối chiếu cảnh báo.
     def get_rule(self, rule_id: str) -> dict:
         try:
             response = self.http.get("/api/detection_engine/rules", params={"rule_id": rule_id})

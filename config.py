@@ -16,6 +16,7 @@ class ConfigurationError(ValueError):
 _INDEX_NAME = re.compile(r"^[A-Za-z0-9._*,-]+$")
 
 
+# Yêu cầu HTTPS cho Elasticsearch và chỉ cho phép Kibana dùng HTTP trên loopback.
 def _check_url(value: str, name: str, *, allow_loopback_http: bool = False) -> str:
     parsed = urlparse(value)
     if (
@@ -39,10 +40,12 @@ class Settings:
     kibana_api_key: str | None = None
     event_index: str = "elk-lab-victim-ecs-*"
     alert_alias: str = ".alerts-security.alerts-default"
+    # Đặt giới hạn mặc định bảy ngày, một trăm mục kết quả và mười giây chờ backend.
     max_days: int = 7
     max_limit: int = 100
     timeout_seconds: float = 10.0
 
+    # Nạp API key, chứng chỉ CA và phạm vi dữ liệu từ biến môi trường khi khởi động.
     @classmethod
     def from_env(cls) -> "Settings":
         elastic_url = os.getenv("ELASTIC_URL", "https://127.0.0.1:9200")

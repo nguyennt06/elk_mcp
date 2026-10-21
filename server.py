@@ -15,6 +15,7 @@ from .config import ConfigurationError, Settings
 from .service import InputError, InvestigationService
 
 
+# Ghi log kỹ thuật qua stderr để dành stdout cho thông điệp giao thức MCP.
 logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("elk_mcp")
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -22,8 +23,10 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 def create_server(service: InvestigationService) -> MCPServer:
     mcp = MCPServer("elk_mcp", version="0.1.0")
+    # Khai báo các công cụ là chỉ đọc trong metadata gửi cho MCP Client.
     read_only = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
 
+    # Chuyển lỗi đầu vào, lỗi backend và lỗi nội bộ thành phản hồi có cấu trúc.
     def safe_call(name: str, operation: Callable[..., dict], **arguments: Any) -> dict:
         started = time.monotonic()
         try:
@@ -39,9 +42,11 @@ def create_server(service: InvestigationService) -> MCPServer:
             result = {"error": {"code": "internal_error", "message": "Tool gặp lỗi nội bộ; kiểm tra log kỹ thuật."}, "query_scope": None, "items": [], "provenance": [], "warnings": [], "truncated": False}
             status = "internal_error"
             logger.error("tool=%s internal_error_type=%s", name, type(exc).__name__)
+        # Ghi tên công cụ, trạng thái, thời gian xử lý và số phần tử trả về để hỗ trợ truy vết.
         logger.info("tool=%s status=%s duration_ms=%d items=%d", name, status, round((time.monotonic() - started) * 1000), len(result.get("items", [])))
         return result
 
+    # Đăng ký các công cụ kèm tên, mô tả và schema tham số để ứng dụng AI gọi.
     @mcp.tool(annotations=read_only)
     def search_logs(
         time_range: dict[str, str], query: str | None = None,
@@ -83,6 +88,7 @@ def create_server(service: InvestigationService) -> MCPServer:
     return mcp
 
 
+# Nạp cấu hình, kết nối backend và khởi chạy MCP Server qua stdio.
 def main() -> None:
     try:
         settings = Settings.from_env()

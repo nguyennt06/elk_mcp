@@ -99,6 +99,7 @@ def _nested(obj: dict, *keys: str) -> Any:
     return obj
 
 
+# Yêu cầu thời gian có múi giờ và chuyển về UTC trước khi truy vấn.
 def _utc(value: str) -> datetime:
     if not isinstance(value, str):
         raise InputError("Thời gian phải là ISO 8601 có múi giờ")
@@ -115,6 +116,7 @@ def _iso(value: datetime) -> str:
     return value.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+# Từ chối số lượng kết quả nằm ngoài giới hạn được cấu hình.
 def _limit(value: int, maximum: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 1 or value > maximum:
         raise InputError(f"limit phải từ 1 đến {maximum}")
@@ -159,6 +161,7 @@ def _clean_log(value: Any) -> str | None:
     return "".join(c if c.isprintable() else " " for c in value)[:MAX_LOG_TEXT]
 
 
+# Lựa chọn và đổi tên các trường sự kiện theo cấu trúc kết quả thống nhất.
 def _event(hit: dict) -> dict:
     """Report every configured field of one event, with its source index and ID."""
     src = hit.get("_source") or {}
@@ -168,6 +171,7 @@ def _event(hit: dict) -> dict:
     event = {key: _nested(src, *path) for key, path in REPORTED_FIELDS.items()}
     event.update({key: _clean_log(_nested(src, *path)) for key, path in UNTRUSTED_FIELDS.items()})
     event.update({
+        # Đánh dấu nội dung log để nhắc AI chỉ đọc và phân tích thay vì làm theo chỉ dẫn trong log.
         "log_text_untrusted": _clean_log(_nested(src, "event", "original") or src.get("message")),
         "tags": [str(tag)[:80] for tag in tags[:20]],
         "index": hit.get("_index"),
@@ -195,6 +199,7 @@ def _alert(hit: dict) -> dict:
     }
 
 
+# Đính kèm index và ID của bản ghi để người phân tích đối chiếu bằng chứng.
 def _provenance(items: list[dict]) -> list[dict]:
     return [{"index": item["index"], "id": item["id"]} for item in items if item.get("index") and item.get("id")]
 
@@ -205,12 +210,14 @@ class InvestigationService:
         self.elastic = elastic
         self.kibana = kibana
 
+    # Kiểm tra thứ tự và độ dài khoảng thời gian truy vấn.
     def _window(self, start_time: str, end_time: str) -> tuple[datetime, datetime]:
         start, end = _utc(start_time), _utc(end_time)
         if start >= end or end - start > timedelta(days=self.settings.max_days):
             raise InputError(f"Khoảng thời gian phải tăng và không quá {self.settings.max_days} ngày")
         return start, end
 
+    # Xây dựng điều kiện truy vấn DSL từ thời gian và bộ lọc đã kiểm tra.
     @staticmethod
     def _filters(start: datetime, end: datetime, **terms: str | None) -> list[dict]:
         filters: list[dict] = [{"range": {"@timestamp": {"gte": _iso(start), "lte": _iso(end)}}}]
@@ -253,6 +260,7 @@ class InvestigationService:
             raise InputError("entity.value là bắt buộc")
         return field, text
 
+    # Chỉ chấp nhận các trường lọc và giá trị hợp lệ trong phạm vi cho phép.
     @staticmethod
     def _filter_terms(value: list[dict[str, str]] | None, allowed: set[str]) -> dict[str, str]:
         if value is None:
@@ -272,6 +280,7 @@ class InvestigationService:
             terms[field] = checked
         return terms
 
+    # Giới hạn nguồn truy vấn trong các chỉ mục và alias đã cấu hình.
     def _selected_indices(self, value: list[str] | None) -> list[tuple[str, str]]:
         selected = ["events"] if value is None else value
         if not isinstance(selected, list) or not 1 <= len(selected) <= 2:
@@ -290,6 +299,7 @@ class InvestigationService:
             raise InputError("indices bị lặp")
         return result
 
+    # Tra cứu sự kiện và cảnh báo theo thời gian, cụm từ và bộ lọc.
     def search_logs(
         self, time_range: dict[str, str], query: str | None = None,
         filters: list[dict[str, str]] | None = None,
@@ -321,6 +331,7 @@ class InvestigationService:
             items.extend((dict(_event(hit), record_type="event") if kind == "events" else dict(_alert(hit), record_type="alert"))
                          for hit in response.get("hits", {}).get("hits", []))
         items.sort(key=lambda item: item.get("timestamp") or "", reverse=True)
+        # Đánh dấu kết quả bị giới hạn khi còn bản ghi phù hợp chưa được trả về.
         truncated = len(items) > count or total_hits > count
         items = items[:count]
         result = self._result(start, end, {"query": phrase, "filters": terms}, items, _provenance(items), truncated,
@@ -328,6 +339,7 @@ class InvestigationService:
         result.update({"total_hits": total_hits, "events": items})
         return result
 
+    # Thống kê số bản ghi theo giá trị trường hoặc theo ngày UTC.
     def aggregate_logs(
         self, field: str, agg_type: str, time_range: dict[str, str],
         filters: list[dict[str, str]] | None = None, limit: int = 10,
@@ -366,6 +378,7 @@ class InvestigationService:
         result.update({"buckets": buckets, "total_hits": total.get("value", 0) if isinstance(total, dict) else total})
         return result
 
+    # Tập hợp sự kiện liên quan đến thực thể hoặc bằng chứng của một cảnh báo.
     def correlate_events(
         self, entity: dict[str, str], time_window: dict[str, str],
         related_fields: list[str] | None = None,
@@ -438,6 +451,7 @@ class InvestigationService:
                  "type": "observed_in_same_event", "evidence_count": len(evidence), "provenance": evidence[:5]}
                 for (other, other_value), evidence in grouped.items()]
 
+    # Sắp xếp sự kiện theo thời gian tăng dần để hỗ trợ tái dựng diễn biến.
     def build_timeline(
         self, entities: list[dict[str, str]], time_range: dict[str, str],
         event_types: list[str] | None = None, limit: int = 50,
@@ -467,6 +481,7 @@ class InvestigationService:
         result["timeline"] = items
         return result
 
+    # Khảo sát các thực thể cùng xuất hiện qua một hoặc hai mức liên kết.
     def analyze_impact(self, seed_entity: dict[str, str], time_range: dict[str, str], depth: int = 1) -> dict:
         """Table 2.5 impact scope: bounded graph of observed entity co-occurrences."""
         start, end = self._time_range(time_range)
@@ -554,6 +569,7 @@ class InvestigationService:
         truncated = False
         link_type = "none"
 
+        # Đối chiếu index và ID trong ancestor để lấy các sự kiện nguồn của cảnh báo.
         ancestors = _nested(alert_hit.get("_source") or {}, "kibana", "alert", "ancestors") or []
         pairs = {(a.get("index"), a.get("id")) for a in ancestors if isinstance(a, dict) and a.get("index") and a.get("id")}
         if pairs:
@@ -583,6 +599,7 @@ class InvestigationService:
                 source_ip = _ip(source_ip)
             except InputError:
                 source_ip = None
+            # Tìm sự kiện ứng viên theo IP và thời gian khi cảnh báo thiếu tham chiếu ancestor.
             if source_ip:
                 candidate_filters = {"source.ip": source_ip}
                 if alert.get("dataset"):
@@ -612,6 +629,7 @@ class InvestigationService:
         result.update({"alert": alert, "link_type": link_type, "rule_metadata": rule_metadata})
         return result
 
+    # Đóng gói kết quả kèm phạm vi truy vấn, nguồn bằng chứng, lưu ý và trạng thái giới hạn.
     def _result(
         self, start: datetime, end: datetime, filters: dict, items: list,
         provenance: list[dict], truncated: bool, warnings: list[str] | None = None,
