@@ -1,5 +1,5 @@
 """Local stdio MCP entry point. Elasticsearch credentials never reach Codex."""
-# Đăng ký năm công cụ, tiếp nhận lời gọi từ MCP Client, xử lý lỗi và ghi log kỹ thuật.
+# Đăng ký năm công cụ, tiếp nhận lời gọi từ MCP Client, xử lý lỗi (Error Handling) và ghi log kỹ thuật (Logging).
 from __future__ import annotations
 
 import logging
