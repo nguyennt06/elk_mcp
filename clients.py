@@ -1,5 +1,5 @@
 """Small, read-only HTTP clients for Elasticsearch and Kibana."""
-# Giao tiếp với Elasticsearch để truy vấn dữ liệu và với Kibana để đọc thông tin rule khi được cấu hình.
+# Giao tiếp với Elasticsearch để truy vấn dữ liệu và với Kibana để đọc thông tin rule khi được cấu hình. Bổ sung thông tin rule liên quan để hỗ trợ đối chiếu cảnh báo
 from __future__ import annotations
 
 import httpx
