@@ -1,5 +1,5 @@
 """Bounded implementations of the five operations in the original Table 2.5."""
-
+# Thực hiện logic của năm công cụ, kiểm tra tham số, xây dựng truy vấn và chuẩn hóa kết quả trả về.
 from __future__ import annotations
 
 import ipaddress
