@@ -1,5 +1,5 @@
 """Configuration is owned by the local operator, never by a tool call."""
-
+# Nạp và kiểm tra cấu hình kết nối, API key, chứng chỉ CA, phạm vi dữ liệu và các giới hạn truy vấn.
 from __future__ import annotations
 
 import os
