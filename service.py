@@ -629,7 +629,7 @@ class InvestigationService:
         result.update({"alert": alert, "link_type": link_type, "rule_metadata": rule_metadata})
         return result
 
-    # Đóng gói kết quả kèm phạm vi truy vấn, nguồn bằng chứng, lưu ý và trạng thái giới hạn.
+    # Đóng gói kết quả kèm phạm vi truy vấn, nguồn bằng chứng, lưu ý và trạng thái giới hạn. Là dữ liệu có cấu trúc được trả về trực tiếp cho Codex theo giao thức MCP
     def _result(
         self, start: datetime, end: datetime, filters: dict, items: list,
         provenance: list[dict], truncated: bool, warnings: list[str] | None = None,
